@@ -1,0 +1,15 @@
+package com.github.karlnicholas.djsdist.model;
+
+public enum TransactionType {
+	UNKNOWN, 
+	LOAN_FUNDING, 
+	PAYMENT_CREDIT, 
+	PAYMENT_DEBIT, 
+	INTEREST_CREDIT, 
+	INTEREST_DEBIT, 
+	RETURNED_PAYMENT_CREDIT, 
+	RETURNED_PAYMENT_DEBIT, 
+	LATE_FEE_CREDIT, 
+	LATE_FEE_DEBIT,
+	BILLING_CYCLE
+}

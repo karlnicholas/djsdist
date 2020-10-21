@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option java_package = "com.github.karlnicholas.djsdist.distributed";
+
+message WorkItemMessage {
+  map<string, bytes> params = 1;
+  map<string, bytes> results = 2;
+}
+
+
+service TransactionProcessor {
+  rpc ValidateAndProcess(WorkItemMessage) returns (WorkItemMessage) {}
+  rpc AccountFunded(WorkItemMessage) returns (WorkItemMessage) {}
+  rpc InitialBillingCycle(WorkItemMessage) returns (WorkItemMessage) {}
+}
+
+service BillingCycleProcessor {
+  rpc AccountDueDate(WorkItemMessage) returns (WorkItemMessage) {}
+  rpc AccountInterest(WorkItemMessage) returns (WorkItemMessage) {}
+  rpc AccountBillingCycle(WorkItemMessage) returns (WorkItemMessage) {}
+  rpc AccountClosing(WorkItemMessage) returns (WorkItemMessage) {}
+}
