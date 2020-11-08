@@ -2,6 +2,7 @@ package com.github.karlnicholas.djsdist.distributed;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.Period;
 import java.util.HashMap;
 import java.util.List;
@@ -28,7 +29,6 @@ import com.github.karlnicholas.djsdist.repository.AccountRepository;
 import com.github.karlnicholas.djsdist.repository.LoanRepository;
 import com.github.karlnicholas.djsdist.repository.TransactionOpenRepository;
 import com.github.karlnicholas.djsdist.service.AccountClosedService;
-import com.github.karlnicholas.djsdist.service.BusinessDateService;
 import com.github.karlnicholas.djsdist.service.PostingReader;
 import com.google.protobuf.ByteString;
 
@@ -41,7 +41,6 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 	private final AccountRepository accountRepository;
 	private final TransactionOpenRepository transactionOpenRepository;
 	private final LoanRepository loanRepository;
-	private final BusinessDateService businessDateService;
 	private final AccountClosedService accountClosedService;
 
 	public BillingCycleProcessor(
@@ -49,14 +48,12 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 			AccountRepository accountRepository, 
 			TransactionOpenRepository transactionOpenRepository, 
 			LoanRepository loanRepository, 
-			BusinessDateService businessDateService, 
 			AccountClosedService accountClosedService
 	) {
 		this.accountRepository = accountRepository;
 		this.postingReader = postingReader;
 		this.transactionOpenRepository = transactionOpenRepository;
 		this.loanRepository = loanRepository;
-		this.businessDateService = businessDateService;
 		this.accountClosedService = accountClosedService;
 	}
 	@Override
@@ -64,11 +61,11 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 		Map<String, ByteString> results = new HashMap<>();
 		results.putAll(request.getResultsMap());
 		Long accountId = Long.parseLong(request.getParamsOrThrow("subject").toStringUtf8());
-		String billingDate = request.getParamsOrThrow("billingdate").toStringUtf8();
+		LocalDate billingDate = LocalDate.parse(request.getParamsOrThrow("billingdate").toStringUtf8());
 		Optional<Account> account = accountRepository.findById(accountId);
 		if (account.isPresent()) {
 			BillingCyclePosting billingCyclePosting = getBillingCycleByDateOrLatest(account.get().getId(), billingDate);
-			BigDecimal lateFeeAmount = updateLateFeeForBillingCycle(account.get(), billingCyclePosting);
+			BigDecimal lateFeeAmount = updateLateFeeForBillingCycle(billingDate, account.get(), billingCyclePosting);
 			if ( lateFeeAmount.compareTo(BigDecimal.ZERO) > 0 ) {
 				results.put("LateFee", ByteString.copyFromUtf8(lateFeeAmount.toString()));
 			}
@@ -83,7 +80,7 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
     }
 
 
-	private BigDecimal updateLateFeeForBillingCycle(Account account, BillingCyclePosting billingCyclePosting) {
+	private BigDecimal updateLateFeeForBillingCycle(LocalDate businessDate, Account account, BillingCyclePosting billingCyclePosting) {
 		AccountBalances accountBalances = getAccountBalances(account.getId(), billingCyclePosting);
 		BigDecimal mindueRemaing = billingCyclePosting.getFixedMindue().subtract(accountBalances.getDueDateCredits());
 		BigDecimal lateFeeDue = BigDecimal.ZERO;
@@ -99,12 +96,12 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 				lateFeeType = TransactionType.LATE_FEE_CREDIT;
 				lateFeeDue = lateFeeDue.abs();
 			}
-			persistLateFeeRecord(account, billingCyclePosting, lateFeeDue, lateFeeType);
+			persistLateFeeRecord(businessDate, account, billingCyclePosting, lateFeeDue, lateFeeType);
 		}
 		return lateFeeDue;
 	}
 
-	private void persistLateFeeRecord(Account account, BillingCyclePosting billingCyclePosting, BigDecimal amount, TransactionType lateFeeType) {
+	private void persistLateFeeRecord(LocalDate businessDate, Account account, BillingCyclePosting billingCyclePosting, BigDecimal amount, TransactionType lateFeeType) {
 		// create latefee debit
 		LateFeePosting lateFeePosting = LateFeePosting.builder()
 				.amount(amount).date(billingCyclePosting.getMindueDate())
@@ -113,7 +110,7 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 		TransactionOpen lateFeeTransaction = TransactionOpen.builder()
 				.accountId(account.getId())
 				.version(1L)
-				.businessDate(businessDateService.getBusinessDate())
+				.businessDate(businessDate)
 				.transactionDate(billingCyclePosting.retrieveTransactionDate())
 				.transactionType(lateFeeType)
 				.payload(postingReader.writeValueAsString(lateFeePosting))
@@ -126,11 +123,11 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 		Map<String, ByteString> results = new HashMap<>();
 		results.putAll(request.getResultsMap());
 		Long accountId = Long.parseLong(request.getParamsOrThrow("subject").toStringUtf8());
-		String billingDate = request.getParamsOrThrow("billingdate").toStringUtf8();
+		LocalDate billingDate = LocalDate.parse(request.getParamsOrThrow("billingdate").toStringUtf8());
 		Optional<Account> account = accountRepository.findById(accountId);
 		if (account.isPresent()) {
 			BillingCyclePosting billingCyclePosting = getBillingCycleByDateOrLatest(account.get().getId(), billingDate);
-			BigDecimal interestDue = updateInterestForBillingCycle(Account.builder().id(accountId).build(), billingCyclePosting);
+			BigDecimal interestDue = updateInterestForBillingCycle(billingDate, Account.builder().id(accountId).build(), billingCyclePosting);
 			results.put("Interest", ByteString.copyFromUtf8(interestDue.toString()));
 		} else {
 			throw new IllegalArgumentException("invalid accountId in accountInterest: " + accountId);
@@ -142,7 +139,7 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
         responseObserver.onCompleted();
 	}
 
-	private BigDecimal updateInterestForBillingCycle(Account account, BillingCyclePosting billingCyclePosting) {
+	private BigDecimal updateInterestForBillingCycle(LocalDate businessDate, Account account, BillingCyclePosting billingCyclePosting) {
 		Optional<TransactionOpen> fundingTransaction = transactionOpenRepository.findByAccountIdAndTransactionType(account.getId(), TransactionType.LOAN_FUNDING);
 		if (fundingTransaction.isPresent()) {
 			LoanFundingPosting loanFundPosting = postingReader.readValue(fundingTransaction.get(), LoanFundingPosting.class);
@@ -164,21 +161,21 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 					interestType = TransactionType.INTEREST_CREDIT;
 					interestDue = interestDue.abs();
 				}
-				persistInterestRecord(fundingTransaction.get(), billingCyclePosting, interestDue, interestType);
+				persistInterestRecord(businessDate, fundingTransaction.get(), billingCyclePosting, interestDue, interestType);
 			}
 			return interestDue;
 		}
 		return BigDecimal.ZERO;
 	}
 	
-	private void persistInterestRecord(TransactionOpen fundingTransaction, BillingCyclePosting billingCyclePosting, BigDecimal interestDue, TransactionType transactionType) {
+	private void persistInterestRecord(LocalDate businessDate, TransactionOpen fundingTransaction, BillingCyclePosting billingCyclePosting, BigDecimal interestDue, TransactionType transactionType) {
 		// create interest debit
 		InterestPosting interestPosting = InterestPosting.builder().amount(interestDue)
 				.date(billingCyclePosting.getPeriodEndDate().minusDays(1)).build();
 
 		TransactionOpen interestTransaction = TransactionOpen.builder()
 				.accountId(fundingTransaction.getAccountId()).version(1L)
-				.businessDate(businessDateService.getBusinessDate())
+				.businessDate(businessDate)
 				.transactionDate(interestPosting.retrieveTransactionDate())
 				.transactionType(transactionType)
 				.payload(postingReader.writeValueAsString(interestPosting)).build();
@@ -189,11 +186,11 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 	@Override
 	public void accountBillingCycle(WorkItemMessage request, StreamObserver<WorkItemMessage> responseObserver) {
 		Long accountId = Long.parseLong(request.getParamsOrThrow("subject").toStringUtf8());
-		String billingDate = request.getParamsOrThrow("billingdate").toStringUtf8();
+		LocalDate billingDate = LocalDate.parse(request.getParamsOrThrow("billingdate").toStringUtf8());
 		Optional<Account> account = accountRepository.findById(accountId);
 		if (account.isPresent()) {
 			BillingCyclePosting billingCyclePosting = getBillingCycleByDateOrLatest(accountId, billingDate);
-			billingCycleForBillingCycle(account.get(), billingCyclePosting);
+			billingCycleForBillingCycle(billingDate, account.get(), billingCyclePosting);
 		} else {
 			throw new IllegalArgumentException("invalid accountId in accountBillingCycle: " + accountId);
 		}
@@ -204,7 +201,7 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
         responseObserver.onCompleted();
     }
 
-	private BillingCyclePosting billingCycleForBillingCycle(Account account, BillingCyclePosting billingCyclePosting) {
+	private BillingCyclePosting billingCycleForBillingCycle(LocalDate businessDate, Account account, BillingCyclePosting billingCyclePosting) {
 		Loan loan = loanRepository.findByAccountId(account.getId());
 		AccountBalances accountBalances  = getAccountBalances(account.getId(), billingCyclePosting);
 		BigDecimal newPrincipal = accountBalances.getPrincipal().add(accountBalances.getTotalDebits()).subtract(accountBalances.getTotalCredits());
@@ -245,7 +242,7 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 		TransactionOpen billingCycleTransaction = TransactionOpen.builder()
 				.accountId(account.getId())
 				.version(1L)
-				.businessDate(businessDateService.getBusinessDate())
+				.businessDate(businessDate)
 				.transactionDate(billingCyclePosting.retrieveTransactionDate())
 				.transactionType(TransactionType.BILLING_CYCLE)
 				.payload(postingReader.writeValueAsString(billingCyclePosting)).build();
@@ -256,7 +253,7 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 	@Override
 	public void accountClosing(WorkItemMessage request, StreamObserver<WorkItemMessage> responseObserver) {
 		Long accountId = Long.parseLong(request.getParamsOrThrow("subject").toStringUtf8());
-		String billingDate = request.getParamsOrThrow("billingdate").toStringUtf8();
+		LocalDate billingDate = LocalDate.parse(request.getParamsOrThrow("billingdate").toStringUtf8());
 		Optional<Account> account = accountRepository.findById(accountId);
 		if (account.isPresent()) {
 			BillingCyclePosting billingCyclePosting = getBillingCycleByDateOrLatest(accountId, billingDate);
@@ -337,7 +334,7 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 				.collect(Collectors.toList());
 	}
 
-	private BillingCyclePosting getBillingCycleByDateOrLatest(Long accountId, String billingDate) {
+	private BillingCyclePosting getBillingCycleByDateOrLatest(Long accountId, LocalDate billingDate) {
 		TransactionOpen transaction = transactionOpenRepository.fetchLatestBillingCycleForAccount(accountId);
 		return postingReader.readValue(transaction, BillingCyclePosting.class);
 	}

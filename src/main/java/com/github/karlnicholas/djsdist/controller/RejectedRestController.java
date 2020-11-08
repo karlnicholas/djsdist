@@ -4,24 +4,24 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.github.karlnicholas.djsdist.model.TransactionOpen;
-import com.github.karlnicholas.djsdist.repository.TransactionOpenRepository;
+import com.github.karlnicholas.djsdist.model.Transaction;
+import com.github.karlnicholas.djsdist.repository.TransactionRejectedRepository;
 
 @RestController
-@RequestMapping("/open")
+@RequestMapping("/rejected")
 public class RejectedRestController {
-	private final TransactionOpenRepository transactionOpenRepository;
+	private final TransactionRejectedRepository transactionRejectedRepository;
 	public RejectedRestController(
-			TransactionOpenRepository transactionOpenRepository 
+			TransactionRejectedRepository transactionRejectedRepository 
 	) {
-		this.transactionOpenRepository = transactionOpenRepository;
+		this.transactionRejectedRepository = transactionRejectedRepository;
 	}
 	@GetMapping("transactions")
-	public Iterable<TransactionOpen> listTransactions() {
-		return transactionOpenRepository.findAll();
+	public Iterable<Transaction> listTransactions() {
+		return transactionRejectedRepository.findAll();
 	}
 	@GetMapping("count")
 	public Long countTransactions() {
-		return transactionOpenRepository.count();
+		return transactionRejectedRepository.count();
 	}
 }

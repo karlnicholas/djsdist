@@ -17,7 +17,7 @@ public class PaymentTestData implements Observer {
 	@Override
 	public void update(Observable o, Object arg) {
 		NotificationParameters notificationParameters = (NotificationParameters)arg;
-		if ( notificationParameters.getAction().equals(ACCOUNT_ACTIONS.PAYMENT) 
+		if ( notificationParameters.getAction().equals(ACCOUNT_ACTIONS.BUSINESS_DATE) 
 				&& notificationParameters.getDate().isEqual(businessDate)
 		) {
 			DataDrivenTestAccount accountTest = (DataDrivenTestAccount)o;

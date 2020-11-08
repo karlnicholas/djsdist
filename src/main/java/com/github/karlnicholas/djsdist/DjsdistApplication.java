@@ -1,6 +1,5 @@
 package com.github.karlnicholas.djsdist;
 
-import java.sql.ResultSet;
 import java.sql.Statement;
 
 import javax.sql.DataSource;
@@ -39,6 +38,7 @@ public class DjsdistApplication implements ApplicationRunner {
 			statement.execute("create table transaction_open (id bigint identity, business_date date, payload varchar(4000), transaction_date date, transaction_type varchar(255), version bigint, account_id bigint, primary key (id))");
 			statement.execute("create table transaction_submitted (id bigint identity, business_date date, payload varchar(4000), transaction_date date, transaction_type varchar(255), version bigint, account_id bigint, primary key (id))");
 			statement.execute("create table transaction_rejected (id bigint not null, business_date date, payload varchar(4000), transaction_date date, transaction_type varchar(255), version bigint, account_id bigint, primary key (id))");
+			statement.execute("create table billing_cycle (id bigint identity, period_end_date date, business_date date, payload varchar(4000), transaction_date date, transaction_type varchar(255), version bigint, account_id bigint, primary key (id))");
 			statement.execute("create index IDX8hl04kre9pgr0b9b7r5jipqra on account_closed (original_id)");
 			statement.execute("create index IDXfjs1q0rt6k8jcu5gltousur8y on transaction_open (account_id, transaction_type)");
 			statement.execute("alter table loan add constraint FKnbbh9l71cf3hk76mvmjjfn7n5 foreign key (account_id) references account");

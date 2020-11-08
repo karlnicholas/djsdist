@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import com.github.karlnicholas.djsdist.distributed.ServiceClients;
 import com.github.karlnicholas.djsdist.distributed.Grpcservices.WorkItemMessage;
 import com.github.karlnicholas.djsdist.model.TransactionType;
+import com.github.karlnicholas.djsdist.repository.TransactionOpenRepository;
 import com.github.karlnicholas.djsdist.repository.TransactionSubmittedRepository;
 import com.google.protobuf.ByteString;
 
@@ -20,11 +21,14 @@ public class TransactionHandler {
 	private static final Logger logger = LoggerFactory.getLogger(TransactionHandler.class);
 	private final ServiceClients serviceClients;
 	private final TransactionSubmittedRepository transactionSubmittedRepository;
+	private final TransactionOpenRepository transactionOpenRepository;
 	public TransactionHandler(
 			TransactionSubmittedRepository transactionSubmittedRepository, 
+			TransactionOpenRepository transactionOpenRepository, 
 			ServiceClients serviceClients
 	) {
 		this.transactionSubmittedRepository = transactionSubmittedRepository;
+		this.transactionOpenRepository = transactionOpenRepository;
 		this.serviceClients = serviceClients;
 	}
 	@Async
@@ -36,25 +40,29 @@ public class TransactionHandler {
 		  	      + transactionSubmitted
 		  	      );
 		    handleTransaction(transactionSubmitted.getId(), priorBusinessDate);
+			logger.info("handleBillingCycle");
+
 		});
-		logger.info("handleBillingCycle");
 
-		Map<String, ByteString> params = new HashMap<>();
-		Map<String, ByteString> results = new HashMap<>();
-		params.put("billingdate", ByteString.copyFromUtf8(priorBusinessDate.toString()));
-
-		WorkItemMessage wim = serviceClients.accountDueDate(WorkItemMessage.newBuilder().putAllParams(params).putAllResults(results).build());
-		params.putAll(wim.getParamsMap());
-		results.putAll(wim.getResultsMap());
-		serviceClients.accountInterest(wim.toBuilder().putAllParams(params).putAllResults(results).build());
-		params.putAll(wim.getParamsMap());
-		results.putAll(wim.getResultsMap());
-		serviceClients.accountBillingCycle(wim.toBuilder().putAllParams(params).putAllResults(results).build());
-		params.putAll(wim.getParamsMap());
-		results.putAll(wim.getResultsMap());
-		serviceClients.accountClosing(wim.toBuilder().putAllParams(params).putAllResults(results).build());
-		params.putAll(wim.getParamsMap());
-		results.putAll(wim.getResultsMap());
+		transactionOpenRepository.fetchBillingCyclesForDate(priorBusinessDate).stream().forEach(billingCyclePosting->{
+			Map<String, ByteString> params = new HashMap<>();
+			Map<String, ByteString> results = new HashMap<>();
+			params.put("billingdate", ByteString.copyFromUtf8(priorBusinessDate.toString()));
+			params.put("subject", ByteString.copyFromUtf8(billingCyclePosting.getAccountId().toString()));
+			
+			WorkItemMessage wim = serviceClients.accountDueDate(WorkItemMessage.newBuilder().putAllParams(params).putAllResults(results).build());
+			params.putAll(wim.getParamsMap());
+			results.putAll(wim.getResultsMap());
+			serviceClients.accountInterest(wim.toBuilder().putAllParams(params).putAllResults(results).build());
+			params.putAll(wim.getParamsMap());
+			results.putAll(wim.getResultsMap());
+			serviceClients.accountBillingCycle(wim.toBuilder().putAllParams(params).putAllResults(results).build());
+			params.putAll(wim.getParamsMap());
+			results.putAll(wim.getResultsMap());
+			serviceClients.accountClosing(wim.toBuilder().putAllParams(params).putAllResults(results).build());
+			params.putAll(wim.getParamsMap());
+			results.putAll(wim.getResultsMap());
+		});
 
 	}
 	

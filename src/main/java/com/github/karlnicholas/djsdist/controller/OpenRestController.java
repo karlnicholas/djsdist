@@ -8,7 +8,7 @@ import com.github.karlnicholas.djsdist.model.TransactionOpen;
 import com.github.karlnicholas.djsdist.repository.TransactionOpenRepository;
 
 @RestController
-@RequestMapping("/rejected")
+@RequestMapping("/open")
 public class OpenRestController {
 	private final TransactionOpenRepository transactionOpenRepository;
 	public OpenRestController(

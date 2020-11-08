@@ -7,12 +7,9 @@ import java.util.Observable;
 import java.util.concurrent.ThreadLocalRandom;
 
 import com.github.karlnicholas.djsdist.client.NotificationParameters.ACCOUNT_ACTIONS;
-import com.github.karlnicholas.djsdist.journal.BillingCyclePosting;
 import com.github.karlnicholas.djsdist.model.Account;
 
-public class RandomizedTestAccount implements AccountHolder {
-	private Account account;
-	private BillingCyclePosting billingCyclePosting;
+public class RandomizedTestAccount extends AccountAndBillingCycle implements AccountHolder {
 //	private int paymentCount;
 	private Boolean paymentMade;
 	private LocalDate openDate;
@@ -26,45 +23,42 @@ public class RandomizedTestAccount implements AccountHolder {
 		LocalDate businessDate = notificationParameters.getDate();
 		// check openAccount first
 		if ( notificationParameters.getAction() == ACCOUNT_ACTIONS.OPEN_ACCOUNT && openDate.isEqual(businessDate) ) {
-			account = notificationParameters.getAccountHandler().makeAccount(openDate, 12, new BigDecimal("10000.00"), new BigDecimal("0.0699"));
+			notificationParameters.getAccountHandler().createAccount(openDate, 12, new BigDecimal("10000.00"), new BigDecimal("0.0699"), this);
 	//		paymentCount = 0;
 			paymentMade = Boolean.FALSE;
-			billingCyclePosting = notificationParameters.getAccountHandler().updateBillingCycle(account);
-		} else if ( notificationParameters.getAction() == ACCOUNT_ACTIONS.PAYMENT 
-				&& !paymentMade.booleanValue() 
-				&& (billingCyclePosting.getPeriodStartDate().plusDays(3).compareTo(businessDate) <= 0 || billingCyclePosting.getDeliquent())
+		} else if ( notificationParameters.getAction() == ACCOUNT_ACTIONS.BUSINESS_DATE
+				&& (billingCycle.getPeriodStartDate().plusDays(3).compareTo(businessDate) <= 0 || billingCycle.getDeliquent())
+				&& !paymentMade.booleanValue()
 		) {
 //				System.out.println("parameters =" + parameters + ":" + billingCyclePosting);
 //			if ( parameters.getAction() == ACCOUNT_ACTIONS.PAYMENT && !paymentMade.booleanValue() ) {
 //				String minusBillingDate = billingCyclePosting.getPeriodEndDate().toString();
 //				String businessDate = parameters.getDate().toString();
-			int daysDiff = Math.abs(Period.between(billingCyclePosting.getPeriodEndDate(), businessDate).getDays());
+			int daysDiff = Math.abs(Period.between(billingCycle.getPeriodEndDate(), businessDate).getDays());
 			double divisor = daysDiff;
 			double nextG = ThreadLocalRandom.current().nextDouble();
-			if ( !billingCyclePosting.getDeliquent() ) {
+			if ( !billingCycle.getDeliquent() ) {
 				divisor = (daysDiff/2.0)*(daysDiff/2.0);
 			}
 			double val = 3/((double)(5+divisor));
 			boolean chance = nextG < val;
 //System.out.println(businessDate +":" + minusBillingDate +":"+val+":"+nextG+":"+daysDiff+":"+chance);
 			if ( chance ) {
-				paymentMade = Boolean.TRUE;
+				notificationParameters.getAccountHandler().getStatement(this);
 				LocalDate paymentDate = minusDaysRandom(businessDate, 5);
-				notificationParameters.getAccountHandler().makePayment(account, billingCyclePosting.getFixedMindue(), businessDate, paymentDate);
+				notificationParameters.getAccountHandler().makePayment(account, billingCycle.getFixedMindue(), businessDate, paymentDate);
+				paymentMade = Boolean.TRUE;
 			}
-		} else if ( notificationParameters.getAction() == ACCOUNT_ACTIONS.PAYMENT 
-				&& billingCyclePosting.getMindueDate().isEqual(businessDate)
-				&& false
+		} else if ( notificationParameters.getAction() == ACCOUNT_ACTIONS.BUSINESS_DATE
+				&& (billingCycle.getPeriodEndDate().compareTo(businessDate) == 0)
+				&& paymentMade.booleanValue()
 		) {
-			paymentMade = Boolean.TRUE;
-			notificationParameters.getAccountHandler().makePayment(account, billingCyclePosting.getFixedMindue(), businessDate, businessDate);
-		} else if ( notificationParameters.getAction() == ACCOUNT_ACTIONS.BILLING 
-				&& billingCyclePosting.getPeriodEndDate().isEqual(businessDate) 
-		) {
-			if ( !billingCyclePosting.getClosed().booleanValue() ) {
-				billingCyclePosting = notificationParameters.getAccountHandler().updateBillingCycle(account);
-			}
 			paymentMade = Boolean.FALSE;
+		} else if ( notificationParameters.getAction() == ACCOUNT_ACTIONS.BUSINESS_DATE
+				&& (billingCycle.getPeriodEndDate().compareTo(businessDate) == 0)
+				&& !paymentMade.booleanValue()
+		) {
+			billingCycle.setDeliquent(Boolean.TRUE);
 		}
 	}
 
@@ -84,3 +78,11 @@ public class RandomizedTestAccount implements AccountHolder {
 
 }
 
+/*
+} else if ( notificationParameters.getAction() == ACCOUNT_ACTIONS.PAYMENT 
+&& billingCycle.getMindueDate().isEqual(businessDate)
+&& false
+) {
+paymentMade = Boolean.TRUE;
+notificationParameters.getAccountHandler().makePayment(account, billingCycle.getFixedMindue(), businessDate, businessDate);
+*/

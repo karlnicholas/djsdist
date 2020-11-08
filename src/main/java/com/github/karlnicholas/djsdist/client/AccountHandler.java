@@ -41,7 +41,7 @@ public class AccountHandler extends Observable implements Observer {
 		notifyObservers(arg);
 	}
 
-	protected Account makeAccount(LocalDate openDate, Integer months, BigDecimal principal, BigDecimal rate) {
+	protected void createAccount(LocalDate openDate, Integer months, BigDecimal principal, BigDecimal rate, AccountAndBillingCycle accountAndBillingCycle) {
 
 		Account account = Account.builder().openDate(openDate).build();
 		RestTemplate restTemplate = new RestTemplate();
@@ -65,11 +65,12 @@ public class AccountHandler extends Observable implements Observer {
 					.transactionDate(openDate)
 					.payload(objectMapper.writeValueAsString(loanFundingPosting))
 					.build();
-		ResponseEntity<Void> transactionResponse = restTemplate.postForEntity("http://localhost:8080/queue/post", transactionSubmitted, Void.class);
+		ResponseEntity<TransactionOpen> transactionResponse = restTemplate.postForEntity("http://localhost:8080/transaction/loanfunding", transactionSubmitted, TransactionOpen.class);
 		if ( transactionResponse.getStatusCode() != HttpStatus.ACCEPTED ) {
 			throw new RuntimeException(transactionResponse.toString());
 		}
-		return account;
+		accountAndBillingCycle.setAccount(account);
+		accountAndBillingCycle.setBillingCycle(postingReader.readValue(transactionResponse.getBody(), BillingCyclePosting.class));
 	}
 
 	protected void makePayment(Account account, BigDecimal paymentAmount, LocalDate businessDate, LocalDate paymentDate) {
@@ -85,19 +86,19 @@ public class AccountHandler extends Observable implements Observer {
 					.transactionType(TransactionType.PAYMENT_CREDIT)
 					.payload(objectMapper.writeValueAsString(paymentCreditPosting))
 					.build();
-			ResponseEntity<Void> transactionResponse = restTemplate.postForEntity("http://localhost:8080/queue/post", transactionSubmitted, Void.class);
+			ResponseEntity<Void> transactionResponse = restTemplate.postForEntity("http://localhost:8080/transaction", transactionSubmitted, Void.class);
 			if ( transactionResponse.getStatusCode() != HttpStatus.ACCEPTED ) {
 				throw new IllegalStateException(transactionResponse.toString());
 			}
 		}
 	}
-	protected BillingCyclePosting updateBillingCycle(Account account) {
-		return postingReader.readValue(
-			restTemplate.getForEntity("http://localhost:8080/queue/get/latestbillingcycle/{accountId}", TransactionOpen.class, account.getId()).getBody(), BillingCyclePosting.class
-		);
-	}
 
 	public Account getAccount() {
 		return accountHolder.getAccount();
+	}
+
+	public void getStatement(AccountAndBillingCycle accountAndBillingCycle) {
+		ResponseEntity<TransactionOpen> transactionResponse = restTemplate.getForEntity("http://localhost:8080/statement/{id}", TransactionOpen.class, accountAndBillingCycle.getAccount().getId());
+		accountAndBillingCycle.setBillingCycle(postingReader.readValue(transactionResponse.getBody(), BillingCyclePosting.class));
 	}
 }

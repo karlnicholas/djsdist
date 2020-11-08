@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Observable;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import org.springframework.web.client.RestTemplate;
@@ -41,6 +42,7 @@ public class TestClient extends Observable {
 
 	private void run() throws Exception {
 		List<AccountHandler> accounts = new ArrayList<>();
+/*		
 		DataDrivenTestAccounts testAccounts = objectMapper.readValue(this.getClass().getResourceAsStream("/testdata/testaccounts.json"), DataDrivenTestAccounts.class);
 		for ( DataDrivenTestAccount dataDrivenTestAccount: testAccounts.getTestAccounts() ) {
 			if ( !dataDrivenTestAccount.getDisabled().booleanValue() ) {
@@ -51,6 +53,7 @@ public class TestClient extends Observable {
 				accounts.add(accountHandler);
 			}
 		}
+*/
 		cycleForTwoYearsYear(accounts);
 		log.info("Number of accounts: {}", accounts.size());
 		log.info("Account List: {}", accounts.stream().map(a->a.getAccount().toString()).collect(Collectors.toList()));
@@ -65,14 +68,13 @@ public class TestClient extends Observable {
 			notificationParameters.setDate(runningDate);
 			postBusinessDate(runningDate);
 			setChanged();
-			notifyObservers(notificationParameters.setAction(ACCOUNT_ACTIONS.PAYMENT));
-			postBillingCycle(runningDate);
-/*
+			notifyObservers(notificationParameters.setAction(ACCOUNT_ACTIONS.BUSINESS_DATE));
+//			postBillingCycle(runningDate);
 			boolean newAccount;
 			do {
 				newAccount = false;
 				if ( runningDate.isBefore(LocalDate.of(2020, 6, 1)) && ThreadLocalRandom.current().nextDouble() > .80  && accountCreated == false) {
-//accountCreated = true;
+accountCreated = true;
 					RandomizedTestAccount randomizedTestAccount = new RandomizedTestAccount(runningDate);
 					AccountHandler accountHandler = new AccountHandler(restTemplate, objectMapper, postingReader);
 					accountHandler.addAccount(randomizedTestAccount);
@@ -81,23 +83,21 @@ public class TestClient extends Observable {
 					newAccount = true;
 				}
 			} while ( newAccount );
-*/
 			setChanged();
 			notifyObservers(notificationParameters.setAction(ACCOUNT_ACTIONS.OPEN_ACCOUNT));
-			setChanged();
-			notifyObservers(notificationParameters.setAction(ACCOUNT_ACTIONS.BILLING));
 			runningDate = runningDate.plusDays(1);
 		}
 	}
 	private void postBusinessDate(LocalDate businessDate) throws Exception {
 		restTemplate.postForLocation("http://localhost:8080/businessdate/{businessDate}", null, businessDate);
 	}
+/*
 	private Long[] postBillingCycle(LocalDate cycleDate) throws Exception {
 		Long[] results = restTemplate.getForEntity("http://localhost:8080/billingcycle", Long[].class).getBody();
 	//System.out.println("cycleDate:" + cycleDate +":results:" + results.length);
 		return results;
 	}
-
+*/
 	private AccountClosedSummary getAccountClosedSummary(RestTemplate restTemplate, Account account) {
 		return restTemplate.getForEntity("http://localhost:8080/queue/get/accountclosedsummary/{accountId}", AccountClosedSummary.class, account.getId()).getBody();
 	}
