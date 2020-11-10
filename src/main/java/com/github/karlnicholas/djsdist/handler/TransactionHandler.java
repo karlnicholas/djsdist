@@ -4,15 +4,22 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.jms.Queue;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jms.core.JmsMessagingTemplate;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import com.github.karlnicholas.djsdist.distributed.ServiceClients;
+import com.github.karlnicholas.djsdist.message.TransactionsFoundMessage;
 import com.github.karlnicholas.djsdist.distributed.Grpcservices.WorkItemMessage;
 import com.github.karlnicholas.djsdist.model.TransactionType;
-import com.github.karlnicholas.djsdist.repository.TransactionOpenRepository;
+import com.github.karlnicholas.djsdist.repository.BillingCycleRepository;
 import com.github.karlnicholas.djsdist.repository.TransactionSubmittedRepository;
 import com.google.protobuf.ByteString;
 
@@ -21,30 +28,37 @@ public class TransactionHandler {
 	private static final Logger logger = LoggerFactory.getLogger(TransactionHandler.class);
 	private final ServiceClients serviceClients;
 	private final TransactionSubmittedRepository transactionSubmittedRepository;
-	private final TransactionOpenRepository transactionOpenRepository;
+	private final BillingCycleRepository billingCycleRepository;
+	private final JmsMessagingTemplate jmsQueueTemplate;
+	private final Queue transactionsFoundQueue;
 	public TransactionHandler(
 			TransactionSubmittedRepository transactionSubmittedRepository, 
-			TransactionOpenRepository transactionOpenRepository, 
-			ServiceClients serviceClients
+			BillingCycleRepository billingCycleRepository, 
+			ServiceClients serviceClients, 
+			JmsMessagingTemplate jmsQueueTemplate, 
+			@Qualifier("transactionsfound.queue") Queue transactionsFoundQueue
 	) {
 		this.transactionSubmittedRepository = transactionSubmittedRepository;
-		this.transactionOpenRepository = transactionOpenRepository;
+		this.billingCycleRepository = billingCycleRepository;
 		this.serviceClients = serviceClients;
+		this.jmsQueueTemplate = jmsQueueTemplate;
+		this.transactionsFoundQueue = transactionsFoundQueue;  
 	}
+
 	@Async
 	public void handleEndOfDay(LocalDate priorBusinessDate) {
-		transactionSubmittedRepository.findByBusinessDate(priorBusinessDate)
-		.stream().forEach(transactionSubmitted->{
-		    System.out.println("Execute method asynchronously. " 
-		  	      + Thread.currentThread().getName()
-		  	      + transactionSubmitted
-		  	      );
-		    handleTransaction(transactionSubmitted.getId(), priorBusinessDate);
-			logger.info("handleBillingCycle");
+		// check if any transactions processing outstanding?
+		int count = 100;
+		TransactionsFoundMessage transactionsFoundMessage;
+		do {
+			Message<?> mr = jmsQueueTemplate.sendAndReceive(transactionsFoundQueue, MessageBuilder.withPayload(TransactionsFoundMessage.builder().date(priorBusinessDate).build()).build());
+			transactionsFoundMessage = (TransactionsFoundMessage)mr.getPayload();
+			if ( count-- <= 0 ) {
+				throw new IllegalStateException("Waiting too long for transaction processing");
+			}
+		} while ( transactionsFoundMessage.getTransactionsFound() );
 
-		});
-
-		transactionOpenRepository.fetchBillingCyclesForDate(priorBusinessDate).stream().forEach(billingCyclePosting->{
+		billingCycleRepository.fetchBillingCyclesForPeriodEndDate(priorBusinessDate).stream().forEach(billingCyclePosting->{
 			Map<String, ByteString> params = new HashMap<>();
 			Map<String, ByteString> results = new HashMap<>();
 			params.put("billingdate", ByteString.copyFromUtf8(priorBusinessDate.toString()));

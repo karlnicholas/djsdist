@@ -21,11 +21,13 @@ import com.github.karlnicholas.djsdist.journal.LoanFundingPosting;
 import com.github.karlnicholas.djsdist.journal.PaymentCreditPosting;
 import com.github.karlnicholas.djsdist.journal.PaymentDebitPosting;
 import com.github.karlnicholas.djsdist.model.Account;
+import com.github.karlnicholas.djsdist.model.BillingCycle;
 import com.github.karlnicholas.djsdist.model.Loan;
 import com.github.karlnicholas.djsdist.model.Transaction;
 import com.github.karlnicholas.djsdist.model.TransactionOpen;
 import com.github.karlnicholas.djsdist.model.TransactionType;
 import com.github.karlnicholas.djsdist.repository.AccountRepository;
+import com.github.karlnicholas.djsdist.repository.BillingCycleRepository;
 import com.github.karlnicholas.djsdist.repository.LoanRepository;
 import com.github.karlnicholas.djsdist.repository.TransactionOpenRepository;
 import com.github.karlnicholas.djsdist.service.AccountClosedService;
@@ -42,19 +44,22 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 	private final TransactionOpenRepository transactionOpenRepository;
 	private final LoanRepository loanRepository;
 	private final AccountClosedService accountClosedService;
+	private final BillingCycleRepository billingCycleRepository;
 
 	public BillingCycleProcessor(
 			PostingReader postingReader, 
 			AccountRepository accountRepository, 
 			TransactionOpenRepository transactionOpenRepository, 
 			LoanRepository loanRepository, 
-			AccountClosedService accountClosedService
+			AccountClosedService accountClosedService, 
+			BillingCycleRepository billingCycleRepository
 	) {
 		this.accountRepository = accountRepository;
 		this.postingReader = postingReader;
 		this.transactionOpenRepository = transactionOpenRepository;
 		this.loanRepository = loanRepository;
 		this.accountClosedService = accountClosedService;
+		this.billingCycleRepository = billingCycleRepository;
 	}
 	@Override
 	public void accountDueDate(WorkItemMessage request, StreamObserver<WorkItemMessage> responseObserver) {
@@ -231,23 +236,24 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 			billingCyclePosting = BillingCyclePosting.builder()
 					.fixedMindue(newMindue)
 					.periodStartDate(billingCyclePosting.getPeriodEndDate().plusDays(1))
-					.periodEndDate(billingCyclePosting.getPeriodEndDate().plusMonths(1))
-					.mindueDate(billingCyclePosting.getPeriodEndDate().plusMonths(1).minusDays(5))
+					.periodEndDate(billingCyclePosting.getPeriodEndDate().plusMonths(1).minusDays(1))
+					.mindueDate(billingCyclePosting.getPeriodEndDate().plusMonths(1).minusDays(1).minusDays(5))
 					.deliquent(deliquent)
 					.closed(Boolean.FALSE)
 					.termsRemaining(termsRemaining.getMonths())
 					.principal(newPrincipal).build();
 		}
 
-		TransactionOpen billingCycleTransaction = TransactionOpen.builder()
+		BillingCycle billingCycleTransaction = BillingCycle.builder()
 				.accountId(account.getId())
 				.version(1L)
 				.businessDate(businessDate)
 				.transactionDate(billingCyclePosting.retrieveTransactionDate())
+				.periodEndDate(billingCyclePosting.getPeriodEndDate())
 				.transactionType(TransactionType.BILLING_CYCLE)
 				.payload(postingReader.writeValueAsString(billingCyclePosting)).build();
 
-		return postingReader.readValue(transactionOpenRepository.save(billingCycleTransaction), BillingCyclePosting.class);
+		return postingReader.readValue(billingCycleRepository.save(billingCycleTransaction), BillingCyclePosting.class);
 	}
 
 	@Override
@@ -335,8 +341,9 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 	}
 
 	private BillingCyclePosting getBillingCycleByDateOrLatest(Long accountId, LocalDate billingDate) {
-		TransactionOpen transaction = transactionOpenRepository.fetchLatestBillingCycleForAccount(accountId);
-		return postingReader.readValue(transaction, BillingCyclePosting.class);
+//		TransactionOpen transaction = billingCycleRepository.fetchLatestBillingCycleForAccount(accountId);
+		BillingCycle billingCycle = billingCycleRepository.getBillingCycleByAccountIdAndPeriodEndDate(accountId, billingDate);
+		return postingReader.readValue(billingCycle, BillingCyclePosting.class);
 	}
 
 }

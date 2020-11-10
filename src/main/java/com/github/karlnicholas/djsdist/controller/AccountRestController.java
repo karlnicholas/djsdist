@@ -46,6 +46,10 @@ public class AccountRestController {
 	public ResponseEntity<Account> getAccount(@PathVariable("accountId") Long accountId) {
 		return ResponseEntity.of(accountRepository.findById(accountId));
 	}
+	@GetMapping("transactions")
+	public ResponseEntity<Iterable<Account>> getAccounts() {
+		return ResponseEntity.ok(accountRepository.findAll());
+	}
 	@GetMapping("count")
 	public Long countTransactions() {
 		return accountRepository.count();

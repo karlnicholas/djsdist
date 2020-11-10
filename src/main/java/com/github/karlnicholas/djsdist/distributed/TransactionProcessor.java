@@ -13,9 +13,11 @@ import com.github.karlnicholas.djsdist.distributed.Grpcservices.WorkItemMessage;
 import com.github.karlnicholas.djsdist.journal.BillingCyclePosting;
 import com.github.karlnicholas.djsdist.journal.LoanFundingPosting;
 import com.github.karlnicholas.djsdist.journal.PostingFunctions;
+import com.github.karlnicholas.djsdist.model.BillingCycle;
 import com.github.karlnicholas.djsdist.model.Loan;
 import com.github.karlnicholas.djsdist.model.TransactionOpen;
 import com.github.karlnicholas.djsdist.model.TransactionType;
+import com.github.karlnicholas.djsdist.repository.BillingCycleRepository;
 import com.github.karlnicholas.djsdist.repository.LoanRepository;
 import com.github.karlnicholas.djsdist.repository.TransactionOpenRepository;
 import com.github.karlnicholas.djsdist.repository.TransactionRejectedRepository;
@@ -29,18 +31,21 @@ import io.grpc.stub.StreamObserver;
 public class TransactionProcessor extends TransactionProcessorGrpc.TransactionProcessorImplBase {
 	private final TransactionSubmittedRepository transactionSubmittedRepository;
 	private final TransactionOpenRepository transactionOpenRepository;
+	private final BillingCycleRepository billingCycleRepository;
 	private final TransactionRejectedRepository transactionRejectedRepository;
 	private final LoanRepository loanRepository;
 	private final PostingReader postingReader;
 
 	public TransactionProcessor(TransactionSubmittedRepository transactionSubmittedRepository,
 			TransactionOpenRepository transactionOpenRepository, 
+			BillingCycleRepository billingCycleRepository, 
 			PostingReader postingReader,
 			TransactionRejectedRepository transactionRejectedRepository, 
 			LoanRepository loanRepository
 	) {
 		this.transactionSubmittedRepository = transactionSubmittedRepository;
 		this.transactionOpenRepository = transactionOpenRepository;
+		this.billingCycleRepository = billingCycleRepository;
 		this.loanRepository = loanRepository;
 		this.postingReader = postingReader;
 		this.transactionRejectedRepository = transactionRejectedRepository;
@@ -114,21 +119,22 @@ public class TransactionProcessor extends TransactionProcessorGrpc.TransactionPr
 		Loan loan = loanRepository.findByAccountId(accountId);
 		Period termsRemaining = loan.getInceptionDate().until(loan.getInceptionDate().plusMonths(loan.getTermMonths()));
 		BillingCyclePosting billingCycle = BillingCyclePosting.builder().periodStartDate(loan.getInceptionDate())
-				.periodEndDate(loan.getInceptionDate().plusMonths(1)).fixedMindue(loan.getFixedMindue())
+				.periodEndDate(loan.getInceptionDate().plusMonths(1).minusDays(1)).fixedMindue(loan.getFixedMindue())
 				.deliquent(Boolean.FALSE)
 				.closed(Boolean.FALSE)
 				.termsRemaining(termsRemaining.getMonths())
 				.mindueDate(loan.getInceptionDate().plusMonths(1).minusDays(5)).principal(loan.getPrincipal())
 				.build();
-		TransactionOpen billingCycleTransaction = TransactionOpen.builder()
+		BillingCycle billingCycleTransaction = BillingCycle.builder()
 				// TODO: redo the table id to be sequence id.
 				.accountId(loan.getAccountId())
 				.version(1L)
 				.businessDate(businessDate)
 				.transactionDate(billingCycle.retrieveTransactionDate())
+				.periodEndDate(billingCycle.getPeriodEndDate())
 				.transactionType(TransactionType.BILLING_CYCLE)
 				.payload(postingReader.writeValueAsString(billingCycle)).build();
-		transactionOpenRepository.save(billingCycleTransaction);
+		billingCycleRepository.save(billingCycleTransaction);
 		responseObserver.onNext(request.toBuilder()
 				.putAllParams(request.getParamsMap())
 				.putAllResults(request.getResultsMap())
