@@ -16,6 +16,7 @@ import com.github.karlnicholas.djsdist.model.Loan;
 import com.github.karlnicholas.djsdist.model.Transaction;
 import com.github.karlnicholas.djsdist.model.TransactionSubmitted;
 import com.github.karlnicholas.djsdist.model.TransactionType;
+import com.github.karlnicholas.djsdist.repository.BillingCycleRepository;
 import com.github.karlnicholas.djsdist.repository.LoanRepository;
 import com.github.karlnicholas.djsdist.repository.TransactionOpenRepository;
 import com.github.karlnicholas.djsdist.repository.TransactionSubmittedRepository;
@@ -27,20 +28,20 @@ import com.google.protobuf.ByteString;
 public class LoanRestController {
 	private final LoanRepository loanRepository;
 	private final TransactionSubmittedRepository transactionSubmittedRepository;
-	private final TransactionOpenRepository transactionOpenRepository;
+	private final BillingCycleRepository billingCycleRepository;
 	private final ServiceClients serviceClients;
 	private final BusinessDateService businessDateService;
 	
 	public LoanRestController(
 			LoanRepository loanRepository,  
 			TransactionSubmittedRepository transactionSubmittedRepository,
-			TransactionOpenRepository transactionOpenRepository,
+			BillingCycleRepository billingCycleRepository,
 			ServiceClients serviceClients,
 			BusinessDateService businessDateService
 	) {
 		this.businessDateService = businessDateService;
 		this.serviceClients = serviceClients;
-		this.transactionOpenRepository = transactionOpenRepository;
+		this.billingCycleRepository = billingCycleRepository;
 		this.transactionSubmittedRepository = transactionSubmittedRepository;
 		this.loanRepository = loanRepository;
 	}
@@ -64,7 +65,7 @@ public class LoanRestController {
 			results.putAll(wim.getResultsMap());
 			params.put("subject", ByteString.copyFromUtf8("1"));
 			wim = serviceClients.initialBillingCycle(wim.toBuilder().putAllParams(params).putAllResults(results).build());
-			return ResponseEntity.accepted().body(transactionOpenRepository.fetchLatestBillingCycleForAccount(transactionSubmitted.getAccountId()));
+			return ResponseEntity.accepted().body(billingCycleRepository.fetchLatestBillingCycleForAccount(transactionSubmitted.getAccountId()));
 		} else {
 			return ResponseEntity.badRequest().body(transactionSubmitted);
 		}

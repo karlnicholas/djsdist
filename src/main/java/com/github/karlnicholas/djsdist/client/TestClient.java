@@ -55,10 +55,10 @@ public class TestClient extends Observable {
 		}
 */
 		cycleForTwoYearsYear(accounts);
-		log.info("Number of accounts: {}", accounts.size());
-		log.info("Account List: {}", accounts.stream().map(a->a.getAccount().toString()).collect(Collectors.toList()));
+		log.debug("Number of accounts: {}", accounts.size());
+		log.debug("Account List: {}", accounts.stream().map(a->a.getAccount().toString()).collect(Collectors.toList()));
 		for(AccountHandler accountHandler: accounts) {
-			log.info("AccountSummary: {} ", getAccountClosedSummary(restTemplate, accountHandler.getAccount()));
+			log.debug("AccountSummary: {} ", getAccountClosedSummary(restTemplate, accountHandler.getAccount()));
 		}
 	}
 	public void cycleForTwoYearsYear(List<AccountHandler> accounts) throws Exception {

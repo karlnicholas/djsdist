@@ -18,7 +18,6 @@ import com.github.karlnicholas.djsdist.repository.AccountRepository;
 @RestController
 @RequestMapping("/account")
 public class AccountRestController {
-//	private static final Logger logger = LoggerFactory.getLogger(AccountRestController.class);
 	private final AccountRepository accountRepository;
 	public AccountRestController(
 			AccountRepository accountRepository 

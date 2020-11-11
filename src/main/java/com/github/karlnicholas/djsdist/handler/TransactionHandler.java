@@ -6,8 +6,6 @@ import java.util.Map;
 
 import javax.jms.Queue;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jms.core.JmsMessagingTemplate;
 import org.springframework.messaging.Message;
@@ -20,25 +18,23 @@ import com.github.karlnicholas.djsdist.message.TransactionsFoundMessage;
 import com.github.karlnicholas.djsdist.distributed.Grpcservices.WorkItemMessage;
 import com.github.karlnicholas.djsdist.model.TransactionType;
 import com.github.karlnicholas.djsdist.repository.BillingCycleRepository;
-import com.github.karlnicholas.djsdist.repository.TransactionSubmittedRepository;
 import com.google.protobuf.ByteString;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Component
+@Slf4j
 public class TransactionHandler {
-	private static final Logger logger = LoggerFactory.getLogger(TransactionHandler.class);
 	private final ServiceClients serviceClients;
-	private final TransactionSubmittedRepository transactionSubmittedRepository;
 	private final BillingCycleRepository billingCycleRepository;
 	private final JmsMessagingTemplate jmsQueueTemplate;
 	private final Queue transactionsFoundQueue;
 	public TransactionHandler(
-			TransactionSubmittedRepository transactionSubmittedRepository, 
 			BillingCycleRepository billingCycleRepository, 
 			ServiceClients serviceClients, 
 			JmsMessagingTemplate jmsQueueTemplate, 
 			@Qualifier("transactionsfound.queue") Queue transactionsFoundQueue
 	) {
-		this.transactionSubmittedRepository = transactionSubmittedRepository;
 		this.billingCycleRepository = billingCycleRepository;
 		this.serviceClients = serviceClients;
 		this.jmsQueueTemplate = jmsQueueTemplate;
@@ -82,11 +78,11 @@ public class TransactionHandler {
 	
 	@Async
 	public void asynchHandleTransaction(Long id, LocalDate businessDate) {
-		    handleTransaction(id, businessDate);
+		log.debug("Async handleTransaction");
+	    handleTransaction(id, businessDate);
 	}
 
 	private void handleTransaction(Long id, LocalDate priorBusinessDate) {
-		logger.info("handleTransaction");
 
 		Map<String, ByteString> params = new HashMap<>();
 		Map<String, ByteString> results = new HashMap<>();

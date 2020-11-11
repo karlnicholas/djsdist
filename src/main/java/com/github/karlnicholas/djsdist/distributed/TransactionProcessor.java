@@ -123,7 +123,7 @@ public class TransactionProcessor extends TransactionProcessorGrpc.TransactionPr
 				.deliquent(Boolean.FALSE)
 				.closed(Boolean.FALSE)
 				.termsRemaining(termsRemaining.getMonths())
-				.mindueDate(loan.getInceptionDate().plusMonths(1).minusDays(5)).principal(loan.getPrincipal())
+				.mindueDate(loan.getInceptionDate().plusMonths(1).minusDays(1).minusDays(5)).principal(loan.getPrincipal())
 				.build();
 		BillingCycle billingCycleTransaction = BillingCycle.builder()
 				// TODO: redo the table id to be sequence id.

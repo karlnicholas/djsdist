@@ -2,8 +2,6 @@ package com.github.karlnicholas.djsdist.controller;
 
 import java.time.LocalDate;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,10 +14,12 @@ import com.github.karlnicholas.djsdist.model.TransactionSubmitted;
 import com.github.karlnicholas.djsdist.repository.TransactionSubmittedRepository;
 import com.github.karlnicholas.djsdist.service.BusinessDateService;
 
+import lombok.extern.slf4j.Slf4j;
+
 @RestController
 @RequestMapping("/transaction")
+@Slf4j
 public class TransactionRestController {
-	private static final Logger logger = LoggerFactory.getLogger(TransactionRestController.class);
 	private final TransactionSubmittedRepository transactionSubmittedRepository;
 	private final BusinessDateService businessDateService;
 	private final TransactionHandler transactionHandler;
@@ -38,7 +38,7 @@ public class TransactionRestController {
 			LocalDate businessDate = businessDateService.getBusinessDate();
 			transactionSubmitted.setBusinessDate(businessDate);
 			transactionSubmitted.setAsNew();
-			logger.info("post saving: " + transactionSubmitted);
+			log.debug("post saving: {}", transactionSubmitted);
 			transactionSubmittedRepository.save(transactionSubmitted);
 			transactionHandler.asynchHandleTransaction(transactionSubmitted.getId(), businessDate);
 			return ResponseEntity.accepted().build();

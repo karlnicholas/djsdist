@@ -18,6 +18,9 @@ import com.github.karlnicholas.djsdist.model.TransactionSubmitted;
 import com.github.karlnicholas.djsdist.model.TransactionType;
 import com.github.karlnicholas.djsdist.service.PostingReader;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class AccountHandler extends Observable implements Observer {
 	private final RestTemplate restTemplate;
 	private final ObjectMapperWrapper objectMapper;
@@ -43,14 +46,14 @@ public class AccountHandler extends Observable implements Observer {
 
 	protected void createAccount(LocalDate openDate, Integer months, BigDecimal principal, BigDecimal rate, AccountAndBillingCycle accountAndBillingCycle) {
 
-		Account account = Account.builder().openDate(openDate).build();
+		final Account account = Account.builder().openDate(openDate).build();
 		RestTemplate restTemplate = new RestTemplate();
-
+		log.debug("http://localhost:8080/account {}", account);
 		ResponseEntity<Account> accountResponse = restTemplate.postForEntity("http://localhost:8080/account", account, Account.class);
 		if ( accountResponse.getStatusCode() != HttpStatus.CREATED ) {
 			throw new IllegalStateException(accountResponse.toString());
 		}
-		account = accountResponse.getBody();
+		account.setId(accountResponse.getBody().getId());
 
 		LoanFundingPosting loanFundingPosting = new LoanFundingPosting();
 		loanFundingPosting.setTermMonths(months);
@@ -65,7 +68,8 @@ public class AccountHandler extends Observable implements Observer {
 					.transactionDate(openDate)
 					.payload(objectMapper.writeValueAsString(loanFundingPosting))
 					.build();
-		ResponseEntity<TransactionOpen> transactionResponse = restTemplate.postForEntity("http://localhost:8080/transaction/loanfunding", transactionSubmitted, TransactionOpen.class);
+		log.debug("http://localhost:8080/loan {}", transactionSubmitted);
+		ResponseEntity<TransactionOpen> transactionResponse = restTemplate.postForEntity("http://localhost:8080/loan", transactionSubmitted, TransactionOpen.class);
 		if ( transactionResponse.getStatusCode() != HttpStatus.ACCEPTED ) {
 			throw new RuntimeException(transactionResponse.toString());
 		}
@@ -86,6 +90,7 @@ public class AccountHandler extends Observable implements Observer {
 					.transactionType(TransactionType.PAYMENT_CREDIT)
 					.payload(objectMapper.writeValueAsString(paymentCreditPosting))
 					.build();
+			log.debug("http://localhost:8080/transaction {}", transactionSubmitted);
 			ResponseEntity<Void> transactionResponse = restTemplate.postForEntity("http://localhost:8080/transaction", transactionSubmitted, Void.class);
 			if ( transactionResponse.getStatusCode() != HttpStatus.ACCEPTED ) {
 				throw new IllegalStateException(transactionResponse.toString());
@@ -98,6 +103,7 @@ public class AccountHandler extends Observable implements Observer {
 	}
 
 	public void getStatement(AccountAndBillingCycle accountAndBillingCycle) {
+		log.debug("http://localhost:8080/statement/{}", accountAndBillingCycle.getAccount().getId());
 		ResponseEntity<TransactionOpen> transactionResponse = restTemplate.getForEntity("http://localhost:8080/statement/{id}", TransactionOpen.class, accountAndBillingCycle.getAccount().getId());
 		accountAndBillingCycle.setBillingCycle(postingReader.readValue(transactionResponse.getBody(), BillingCyclePosting.class));
 	}

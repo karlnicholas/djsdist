@@ -235,9 +235,9 @@ public class BillingCycleProcessor extends BillingCycleProcessorGrpc.BillingCycl
 		} else {
 			billingCyclePosting = BillingCyclePosting.builder()
 					.fixedMindue(newMindue)
-					.periodStartDate(billingCyclePosting.getPeriodEndDate().plusDays(1))
-					.periodEndDate(billingCyclePosting.getPeriodEndDate().plusMonths(1).minusDays(1))
-					.mindueDate(billingCyclePosting.getPeriodEndDate().plusMonths(1).minusDays(1).minusDays(5))
+					.periodStartDate(billingCyclePosting.getPeriodStartDate().plusMonths(1))
+					.periodEndDate(billingCyclePosting.getPeriodStartDate().plusMonths(1).plusMonths(1).minusDays(1))
+					.mindueDate(billingCyclePosting.getPeriodStartDate().plusMonths(1).plusMonths(1).minusDays(1).minusDays(5))
 					.deliquent(deliquent)
 					.closed(Boolean.FALSE)
 					.termsRemaining(termsRemaining.getMonths())
